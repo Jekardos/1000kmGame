@@ -1,3 +1,5 @@
+import random
+
 EVENTS = {
     # Положительные события (50)
     "cobra_throw": {
@@ -69,11 +71,10 @@ EVENTS = {
         "type": "positive"
     },
     "good_weather": {
-        "name": "Идеальная погода",
-        "description": "Погода идеальна для путешествия - прохладно, безветренно, дорога ровная.",
-        "effect": "energy_cost",
-        "value": -10,
-        "type": "positive"
+        "name": "Хорошая погода",
+        "description": "Отличная погода для путешествия!",
+        "effect": "energy",
+        "value": 15
     },
     "fresh_forces": {
         "name": "С новыми силами",
@@ -195,6 +196,17 @@ EVENTS = {
         "value": 0,
         "type": "neutral"
     },
+    "meet_traveler": {
+        "name": "Встреча с путешественником",
+        "description": "Вы встретили другого путешественника и обменялись историями!",
+        "effect": "none"
+    },
+    "find_camp": {
+        "name": "Найден лагерь",
+        "description": "Вы нашли старый лагерь и отдохнули там!",
+        "effect": "energy",
+        "value": 10
+    },
 
     # Негативные события (50)
     "sun_hell": {
@@ -226,13 +238,11 @@ EVENTS = {
         "type": "negative"
     },
     "injury": {
-        "name": "Переломный момент",
-        "description": "Вы подвернули ногу. Придется идти медленнее и тратить больше сил.",
+        "name": "Травма",
+        "description": "Вы подвернули ногу!",
         "effect": "injury",
-        "value": 3,
-        "energy_cost": 35,
-        "move_penalty": 1,
-        "type": "negative"
+        "value": 2,
+        "move_penalty": -1
     },
     "dog_injury": {
         "name": "Травма собаки",
@@ -325,5 +335,47 @@ EVENTS = {
         "effect": "dog_health",
         "value": 10,
         "type": "positive"
+    },
+    "dog_sick": {
+        "name": "Собака заболела",
+        "description": "Ваша собака чувствует себя плохо!",
+        "effect": "dog_health",
+        "value": -15
+    },
+    "bad_weather": {
+        "name": "Плохая погода",
+        "description": "Дождь и ветер замедляют ваше движение!",
+        "effect": "move_penalty",
+        "value": -1
+    },
+    "telegram_donation": {
+        "name": "Донат от подписчиков",
+        "description": "Ваши подписчики в Telegram поддержали ваше путешествие!",
+        "effect": "money",
+        "value": (1, 100)  # Случайная сумма от 1 до 100
+    },
+    "sponsor_deal": {
+        "name": "Спонсорский контракт",
+        "description": "Местная компания предложила спонсорство!",
+        "effect": "money",
+        "value": (50, 200)  # Случайная сумма от 50 до 200
+    },
+    "merch_sales": {
+        "name": "Продажа мерча",
+        "description": "Вы продали футболки с логотипом вашего путешествия!",
+        "effect": "money",
+        "value": (30, 150)  # Случайная сумма от 30 до 150
+    },
+    "stream_donation": {
+        "name": "Донат на стриме",
+        "description": "Зрители вашего стрима поддержали путешествие!",
+        "effect": "money",
+        "value": (20, 100)  # Случайная сумма от 20 до 100
+    },
+    "ad_revenue": {
+        "name": "Доход от рекламы",
+        "description": "Вы получили оплату за рекламу в вашем блоге!",
+        "effect": "money",
+        "value": (40, 180)  # Случайная сумма от 40 до 180
     }
 } 

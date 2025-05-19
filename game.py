@@ -1,6 +1,7 @@
 import random
 from events import EVENTS
 from cities import get_city_at_position, get_next_city, get_previous_city, CITIES
+from jobs import JOBS, MINI_GAMES, ACHIEVEMENTS, check_job_requirements, get_job_reward, play_mini_game, check_achievements
 
 # Список городов с магазинами
 SHOP_CITIES = ["Самара", "Сызрань", "Пенза", "Рязань", "Москва"]
@@ -36,7 +37,9 @@ class Game:
         self.money = 100
         self.inventory = {}
         self.turn_count = 0
-        self.dog_abscess = 0  # Добавляем счетчик ходов для абсцесса
+        self.dog_abscess = 0
+        self.games_won = 0
+        self.achievements = ACHIEVEMENTS.copy()
 
     def show_shop_menu(self):
         content = [
@@ -173,20 +176,219 @@ class Game:
             except ValueError:
                 print_message("Ошибка", ["Неверный формат команды!"])
 
+    def show_jobs_menu(self):
+        content = [
+            "Доступные подработки:",
+            ""
+        ]
+        
+        for i, (job_name, job_data) in enumerate(JOBS.items(), 1):
+            can_work, reason = check_job_requirements(
+                job_data, 
+                self.player_health, 
+                self.player_energy, 
+                self.dog_health
+            )
+            
+            status = "✓" if can_work else f"✗ ({reason})"
+            content.append(f"{i}. {job_name} - {job_data['description']} {status}")
+            content.append(f"   Энергия: -{job_data['energy_cost']}, Зарплата: {job_data['money'][0]}-{job_data['money'][1]} JK")
+            content.append("")
+        
+        content.append(f"{len(JOBS) + 1}. Выход")
+        print_message("Подработки", content)
+        
+        while True:
+            choice = input("\nВыберите работу (или выход): ")
+            if choice == str(len(JOBS) + 1) or choice.lower() in ['выход', 'exit']:
+                break
+                
+            try:
+                job_num = int(choice)
+                if 1 <= job_num <= len(JOBS):
+                    job_name = list(JOBS.keys())[job_num - 1]
+                    job_data = JOBS[job_name]
+                    
+                    can_work, reason = check_job_requirements(
+                        job_data, 
+                        self.player_health, 
+                        self.player_energy, 
+                        self.dog_health
+                    )
+                    
+                    if can_work:
+                        self.player_energy -= job_data["energy_cost"]
+                        reward = get_job_reward(job_data)
+                        self.money += reward
+                        self.games_won += 1
+                        
+                        print_message("Работа", [
+                            f"Вы выполнили работу '{job_name}'",
+                            f"Получено: {reward} JK",
+                            f"Потрачено энергии: {job_data['energy_cost']}"
+                        ])
+                        
+                        # Проверяем достижения
+                        achievement_reward = check_achievements({
+                            "turn_count": self.turn_count,
+                            "dog_health": self.dog_health,
+                            "games_won": self.games_won,
+                            "money": self.money
+                        })
+                        
+                        if achievement_reward > 0:
+                            self.money += achievement_reward
+                            print_message("Достижение", [
+                                "Вы получили награду за достижение!",
+                                f"+{achievement_reward} JK"
+                            ])
+                    else:
+                        print_message("Ошибка", [reason])
+                else:
+                    print_message("Ошибка", ["Неверный номер работы!"])
+            except ValueError:
+                print_message("Ошибка", ["Неверный формат команды!"])
+
+    def show_mini_games_menu(self):
+        content = [
+            "Доступные мини-игры:",
+            ""
+        ]
+        
+        for i, (game_name, game_data) in enumerate(MINI_GAMES.items(), 1):
+            if "requirements" in game_data:
+                can_play, reason = check_job_requirements(
+                    game_data, 
+                    self.player_health, 
+                    self.player_energy, 
+                    self.dog_health
+                )
+                status = "✓" if can_play else f"✗ ({reason})"
+            else:
+                can_play, status = True, "✓"
+                
+            content.append(f"{i}. {game_name} - {game_data['description']} {status}")
+            if "energy_cost" in game_data:
+                content.append(f"   Энергия: -{game_data['energy_cost']}")
+            if "min_bet" in game_data:
+                content.append(f"   Ставка: {game_data['min_bet']}-{game_data['max_bet']} JK")
+            if "prize" in game_data:
+                content.append(f"   Приз: {game_data['prize'][0]}-{game_data['prize'][1]} JK")
+            content.append("")
+        
+        content.append(f"{len(MINI_GAMES) + 1}. Выход")
+        print_message("Мини-игры", content)
+        
+        while True:
+            choice = input("\nВыберите игру (или выход): ")
+            if choice == str(len(MINI_GAMES) + 1) or choice.lower() in ['выход', 'exit']:
+                break
+                
+            try:
+                game_num = int(choice)
+                if 1 <= game_num <= len(MINI_GAMES):
+                    game_name = list(MINI_GAMES.keys())[game_num - 1]
+                    game_data = MINI_GAMES[game_name]
+                    
+                    if "requirements" in game_data:
+                        can_play, reason = check_job_requirements(
+                            game_data, 
+                            self.player_health, 
+                            self.player_energy, 
+                            self.dog_health
+                        )
+                        if not can_play:
+                            print_message("Ошибка", [reason])
+                            continue
+                    
+                    if "min_bet" in game_data:
+                        try:
+                            bet = int(input(f"Введите ставку ({game_data['min_bet']}-{game_data['max_bet']} JK): "))
+                            won, result = play_mini_game(game_data, bet)
+                        except ValueError:
+                            print_message("Ошибка", ["Неверная ставка!"])
+                            continue
+                    else:
+                        if self.player_energy < game_data["energy_cost"]:
+                            print_message("Ошибка", ["Недостаточно энергии!"])
+                            continue
+                            
+                        self.player_energy -= game_data["energy_cost"]
+                        won, result = play_mini_game(game_data)
+                    
+                    if won:
+                        self.money += result
+                        self.games_won += result
+                        print_message("Победа", [
+                            f"Вы выиграли {result} JK!"
+                        ])
+                    else:
+                        if "min_bet" in game_data:
+                            self.money += result  # result уже отрицательный
+                            print_message("Проигрыш", [
+                                f"Вы проиграли {abs(result)} JK!"
+                            ])
+                        else:
+                            print_message("Проигрыш", [
+                                "К сожалению, вы не выиграли приз."
+                            ])
+                    
+                    # Проверяем достижения
+                    achievement_reward = check_achievements({
+                        "turn_count": self.turn_count,
+                        "dog_health": self.dog_health,
+                        "games_won": self.games_won,
+                        "money": self.money
+                    })
+                    
+                    if achievement_reward > 0:
+                        self.money += achievement_reward
+                        print_message("Достижение", [
+                            "Вы получили награду за достижение!",
+                            f"+{achievement_reward} JK"
+                        ])
+                else:
+                    print_message("Ошибка", ["Неверный номер игры!"])
+            except ValueError:
+                print_message("Ошибка", ["Неверный формат команды!"])
+
+    def show_achievements_menu(self):
+        content = [
+            "Ваши достижения:",
+            ""
+        ]
+        
+        for achievement_name, achievement_data in self.achievements.items():
+            status = "✓" if achievement_data["completed"] else "✗"
+            if "progress" in achievement_data:
+                progress = f" ({achievement_data['progress']}/10)" if achievement_data["progress"] > 0 else ""
+            else:
+                progress = ""
+            content.append(f"{status} {achievement_name}{progress}")
+            content.append(f"   {achievement_data['description']}")
+            content.append(f"   Награда: {achievement_data['reward']} JK")
+            content.append("")
+        
+        print_message("Достижения", content)
+        input("\nНажмите Enter для продолжения...")
+
     def show_city_menu(self, current_city):
         content = [
             f"Вы находитесь в городе {current_city}",
             "",
             "Доступные здания:",
             "1. Магазин",
-            "2. Отдых"
+            "2. Отдых",
+            "3. Мини-игры",
+            "4. Достижения"
         ]
         
         # Добавляем ветеринарную станцию для Кузнецка и Рязани
         if current_city in ["Кузнецк", "Рязань"]:
-            content.append("3. Ветеринарная станция")
-        
-        content.append("4. Выйти из города")
+            content.append("5. Ветеринарная станция")
+            content.append("6. Выйти из города")
+        else:
+            content.append("5. Выйти из города")
         
         print_message("Город", content)
         
@@ -196,13 +398,17 @@ class Game:
                 self.show_shop_menu()
             elif choice == "2":
                 self.rest()
-            elif choice == "3" and current_city in ["Кузнецк", "Рязань"]:
+            elif choice == "3":
+                self.show_mini_games_menu()
+            elif choice == "4":
+                self.show_achievements_menu()
+            elif choice == "5" and current_city in ["Кузнецк", "Рязань"]:
                 if self.dog_health < 100:
                     self.dog_health = 100
                     print_message("Ветеринарная станция", ["Ветеринарная служба вылечила собаку!"])
                 else:
                     print_message("Ветеринарная станция", ["Собака полностью здорова!"])
-            elif choice == "4":
+            elif choice in ["5", "6"]:
                 break
             else:
                 print_message("Ошибка", ["Неверный выбор!"])
@@ -283,6 +489,11 @@ class Game:
                     else:
                         value = event_data['value']
                     self.money = max(0, self.money + value)
+                    event_message.extend([
+                        f"Получено денег: {value} JK",
+                        f"Текущий баланс: {self.money} JK",
+                        ""
+                    ])
                 elif event_data['effect'] == 'special_move':
                     if self.player_energy >= event_data.get('energy_cost', 0):
                         self.player_energy -= event_data['energy_cost']
