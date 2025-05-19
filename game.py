@@ -1,17 +1,103 @@
 import random
+import json
+import os
 from events import EVENTS
 from cities import get_city_at_position, get_next_city, get_previous_city, CITIES
-from jobs import JOBS, MINI_GAMES, ACHIEVEMENTS, check_job_requirements, get_job_reward, play_mini_game, check_achievements
+from mini_games import MINI_GAMES, play_mini_game
+from achievements import ACHIEVEMENTS
 
 # Список городов с магазинами
 SHOP_CITIES = ["Самара", "Сызрань", "Пенза", "Рязань", "Москва"]
 
 # Товары в магазине
 SHOP_ITEMS = {
-    "Аптечка": {"buy": 200, "sell": 150, "effect": "health", "value": 30},
-    "Вода": {"buy": 100, "sell": 70, "effect": "energy", "value": 20},
-    "Еда": {"buy": 100, "sell": 70, "effect": "energy", "value": 25}
+    "Аптечка": {"buy": 300, "sell": 200, "effect": "health", "value": 30},
+    "Вода": {"buy": 150, "sell": 100, "effect": "energy", "value": 20},
+    "Еда": {"buy": 150, "sell": 100, "effect": "energy", "value": 25}
 }
+
+# Мини-игры (блогерство)
+BLOGGING_ACTIVITIES = {
+    "Стрим": {
+        "description": "Проведите стрим о своем путешествии",
+        "energy_cost": 30,
+        "donation_range": (50, 200)
+    },
+    "Видео": {
+        "description": "Снимите видео о своем путешествии",
+        "energy_cost": 40,
+        "donation_range": (100, 300)
+    },
+    "NFT": {
+        "description": "Выпустите новую коллекцию NFT",
+        "energy_cost": 50,
+        "donation_range": (200, 500)
+    }
+}
+
+def save_game(game_data, username):
+    """Сохраняет игру в файл"""
+    if not os.path.exists('saves'):
+        os.makedirs('saves')
+    
+    with open(f'saves/{username}.json', 'w', encoding='utf-8') as f:
+        json.dump(game_data, f, ensure_ascii=False, indent=4)
+
+def load_game(username):
+    """Загружает игру из файла"""
+    try:
+        with open(f'saves/{username}.json', 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+def get_save_data(game):
+    """Получает данные для сохранения из объекта игры"""
+    return {
+        "player_position": game.player_position,
+        "player_health": game.player_health,
+        "player_energy": game.player_energy,
+        "dog_health": game.dog_health,
+        "injury_turns": game.injury_turns,
+        "last_city": game.last_city,
+        "next_city": game.next_city,
+        "distance_to_next_city": game.distance_to_next_city,
+        "rested_in_city": game.rested_in_city,
+        "skip_next_turn": game.skip_next_turn,
+        "active_effects": game.active_effects,
+        "money": game.money,
+        "inventory": game.inventory,
+        "turn_count": game.turn_count,
+        "dog_abscess": game.dog_abscess,
+        "games_won": game.games_won,
+        "monetization_earnings": game.monetization_earnings,
+        "donations_received": game.donations_received,
+        "sponsor_deals": game.sponsor_deals,
+        "achievements": game.achievements
+    }
+
+def load_save_data(game, save_data):
+    """Загружает данные сохранения в объект игры"""
+    game.player_position = save_data["player_position"]
+    game.player_health = save_data["player_health"]
+    game.player_energy = save_data["player_energy"]
+    game.dog_health = save_data["dog_health"]
+    game.injury_turns = save_data["injury_turns"]
+    game.last_city = save_data["last_city"]
+    game.next_city = save_data["next_city"]
+    game.distance_to_next_city = save_data["distance_to_next_city"]
+    game.rested_in_city = save_data["rested_in_city"]
+    game.skip_next_turn = save_data["skip_next_turn"]
+    game.active_effects = save_data["active_effects"]
+    game.money = save_data["money"]
+    game.inventory = save_data["inventory"]
+    game.turn_count = save_data["turn_count"]
+    game.dog_abscess = save_data["dog_abscess"]
+    game.games_won = save_data["games_won"]
+    game.monetization_earnings = save_data["monetization_earnings"]
+    game.donations_received = save_data["donations_received"]
+    game.sponsor_deals = save_data["sponsor_deals"]
+    game.achievements = save_data["achievements"]
 
 def print_message(title, content):
     """Выводит сообщение без рамок"""
@@ -22,7 +108,8 @@ def print_message(title, content):
     print()
 
 class Game:
-    def __init__(self):
+    def __init__(self, username=None):
+        self.username = username
         self.player_position = 0
         self.player_health = 100
         self.player_energy = 100
@@ -34,21 +121,42 @@ class Game:
         self.rested_in_city = False
         self.skip_next_turn = False
         self.active_effects = {}
-        self.money = 100
-        self.inventory = {}
+        self.money = 50
+        self.inventory = {
+            "Аптечка": 1,
+            "Еда": 1,
+            "Вода": 1
+        }
         self.turn_count = 0
         self.dog_abscess = 0
         self.games_won = 0
+        self.monetization_earnings = 0
+        self.donations_received = 0
+        self.sponsor_deals = 0
         self.achievements = ACHIEVEMENTS.copy()
+
+    def get_inventory_slots(self):
+        """Возвращает количество доступных слотов инвентаря"""
+        return 12 if self.dog_health > 50 else 10
+
+    def get_inventory_size(self):
+        """Возвращает текущий размер инвентаря"""
+        return sum(self.inventory.values())
 
     def show_shop_menu(self):
         content = [
             f"Ваши деньги: {self.money} JK",
+            f"Слоты инвентаря: {self.get_inventory_size()}/{self.get_inventory_slots()}",
             "",
             "Товары:"
         ]
         for i, (item, data) in enumerate(SHOP_ITEMS.items(), 1):
-            content.append(f"{i}. {item} - {data['buy']} JK (продажа: {data['sell']} JK)")
+            effect_text = ""
+            if data["effect"] == "health":
+                effect_text = f"(+{data['value']} здоровья)"
+            elif data["effect"] == "energy":
+                effect_text = f"(+{data['value']} энергии)"
+            content.append(f"{i}. {item} - {data['buy']} JK (продажа: {data['sell']} JK) {effect_text}")
         content.append(f"{len(SHOP_ITEMS) + 1}. Выход")
         
         print_message("Магазин", content)
@@ -65,15 +173,20 @@ class Game:
                     item_name = list(SHOP_ITEMS.keys())[item_num - 1]
                     if action == "купить":
                         if self.money >= SHOP_ITEMS[item_name]["buy"]:
-                            self.money -= SHOP_ITEMS[item_name]["buy"]
-                            self.inventory[item_name] = self.inventory.get(item_name, 0) + 1
-                            print_message("Покупка", [f"Вы купили {item_name}!"])
+                            if self.get_inventory_size() < self.get_inventory_slots():
+                                self.money -= SHOP_ITEMS[item_name]["buy"]
+                                self.inventory[item_name] = self.inventory.get(item_name, 0) + 1
+                                print_message("Покупка", [f"Вы купили {item_name}!"])
+                            else:
+                                print_message("Ошибка", ["Инвентарь полон!"])
                         else:
                             print_message("Ошибка", ["Недостаточно денег!"])
                     elif action == "продать":
                         if item_name in self.inventory and self.inventory[item_name] > 0:
                             self.money += SHOP_ITEMS[item_name]["sell"]
                             self.inventory[item_name] -= 1
+                            if self.inventory[item_name] == 0:
+                                del self.inventory[item_name]
                             print_message("Продажа", [f"Вы продали {item_name}!"])
                         else:
                             print_message("Ошибка", ["У вас нет этого предмета!"])
@@ -154,9 +267,18 @@ class Game:
             print_message("Инвентарь", ["У вас нет предметов!"])
             return
 
-        content = ["Ваши предметы:"]
+        content = [
+            f"Слоты инвентаря: {self.get_inventory_size()}/{self.get_inventory_slots()}",
+            "Ваши предметы:"
+        ]
         for i, (item, count) in enumerate(self.inventory.items(), 1):
-            content.append(f"{i}. {item} (x{count})")
+            effect_text = ""
+            if item in SHOP_ITEMS:
+                if SHOP_ITEMS[item]["effect"] == "health":
+                    effect_text = f" (+{SHOP_ITEMS[item]['value']} здоровья)"
+                elif SHOP_ITEMS[item]["effect"] == "energy":
+                    effect_text = f" (+{SHOP_ITEMS[item]['value']} энергии)"
+            content.append(f"{i}. {item} (x{count}){effect_text}")
         content.append(f"{len(self.inventory) + 1}. Выход")
         
         print_message("Инвентарь", content)
@@ -229,12 +351,7 @@ class Game:
                         ])
                         
                         # Проверяем достижения
-                        achievement_reward = check_achievements({
-                            "turn_count": self.turn_count,
-                            "dog_health": self.dog_health,
-                            "games_won": self.games_won,
-                            "money": self.money
-                        })
+                        achievement_reward = self.check_achievements()
                         
                         if achievement_reward > 0:
                             self.money += achievement_reward
@@ -249,98 +366,71 @@ class Game:
             except ValueError:
                 print_message("Ошибка", ["Неверный формат команды!"])
 
-    def show_mini_games_menu(self):
+    def show_blogging_menu(self):
         content = [
-            "Доступные мини-игры:",
+            "Доступные активности:",
             ""
         ]
         
-        for i, (game_name, game_data) in enumerate(MINI_GAMES.items(), 1):
-            if "requirements" in game_data:
-                can_play, reason = check_job_requirements(
-                    game_data, 
-                    self.player_health, 
-                    self.player_energy, 
-                    self.dog_health
-                )
-                status = "✓" if can_play else f"✗ ({reason})"
+        for i, (activity_name, activity_data) in enumerate(BLOGGING_ACTIVITIES.items(), 1):
+            if self.player_energy < activity_data["energy_cost"]:
+                status = f"✗ (Недостаточно энергии: {self.player_energy}/{activity_data['energy_cost']})"
             else:
-                can_play, status = True, "✓"
+                status = "✓"
                 
-            content.append(f"{i}. {game_name} - {game_data['description']} {status}")
-            if "energy_cost" in game_data:
-                content.append(f"   Энергия: -{game_data['energy_cost']}")
-            if "min_bet" in game_data:
-                content.append(f"   Ставка: {game_data['min_bet']}-{game_data['max_bet']} JK")
-            if "prize" in game_data:
-                content.append(f"   Приз: {game_data['prize'][0]}-{game_data['prize'][1]} JK")
+            content.append(f"{i}. {activity_name} - {activity_data['description']} {status}")
+            content.append(f"   Энергия: -{activity_data['energy_cost']}")
+            content.append(f"   Возможные донаты: {activity_data['donation_range'][0]}-{activity_data['donation_range'][1]} JK")
             content.append("")
         
-        content.append(f"{len(MINI_GAMES) + 1}. Выход")
-        print_message("Мини-игры", content)
+        content.append(f"{len(BLOGGING_ACTIVITIES) + 1}. Выход")
+        print_message("Блогерство", content)
         
         while True:
-            choice = input("\nВыберите игру (или выход): ")
-            if choice == str(len(MINI_GAMES) + 1) or choice.lower() in ['выход', 'exit']:
-                break
+            choice = input("\nВыберите активность (или выход): ")
+            if choice == str(len(BLOGGING_ACTIVITIES) + 1) or choice.lower() in ['выход', 'exit']:
+                current_city = get_city_at_position(self.player_position)
+                if current_city:
+                    self.show_city_menu(current_city)
+                return
                 
             try:
-                game_num = int(choice)
-                if 1 <= game_num <= len(MINI_GAMES):
-                    game_name = list(MINI_GAMES.keys())[game_num - 1]
-                    game_data = MINI_GAMES[game_name]
+                activity_num = int(choice)
+                if 1 <= activity_num <= len(BLOGGING_ACTIVITIES):
+                    activity_name = list(BLOGGING_ACTIVITIES.keys())[activity_num - 1]
+                    activity_data = BLOGGING_ACTIVITIES[activity_name]
                     
-                    if "requirements" in game_data:
-                        can_play, reason = check_job_requirements(
-                            game_data, 
-                            self.player_health, 
-                            self.player_energy, 
-                            self.dog_health
-                        )
-                        if not can_play:
-                            print_message("Ошибка", [reason])
-                            continue
-                    
-                    if "min_bet" in game_data:
-                        try:
-                            bet = int(input(f"Введите ставку ({game_data['min_bet']}-{game_data['max_bet']} JK): "))
-                            won, result = play_mini_game(game_data, bet)
-                        except ValueError:
-                            print_message("Ошибка", ["Неверная ставка!"])
-                            continue
-                    else:
-                        if self.player_energy < game_data["energy_cost"]:
-                            print_message("Ошибка", ["Недостаточно энергии!"])
-                            continue
-                            
-                        self.player_energy -= game_data["energy_cost"]
-                        won, result = play_mini_game(game_data)
+                    if self.player_energy < activity_data["energy_cost"]:
+                        print_message("Ошибка", ["Недостаточно энергии!"])
+                        continue
+                        
+                    self.player_energy -= activity_data["energy_cost"]
+                    won, result = play_mini_game(activity_data)
                     
                     if won:
                         self.money += result
-                        self.games_won += result
-                        print_message("Победа", [
-                            f"Вы выиграли {result} JK!"
+                        self.donations_received += 1
+                        self.monetization_earnings += result
+                            
+                        print_message("Успех", [
+                            f"Вы получили {result} JK!"
                         ])
                     else:
-                        if "min_bet" in game_data:
-                            self.money += result  # result уже отрицательный
-                            print_message("Проигрыш", [
-                                f"Вы проиграли {abs(result)} JK!"
+                        if activity_name == "Стрим":
+                            print_message("Неудача", [
+                                "Стрим вы провели, но вам не донатили!"
                             ])
-                        else:
-                            print_message("Проигрыш", [
-                                "К сожалению, вы не выиграли приз."
+                        elif activity_name == "Видео":
+                            print_message("Неудача", [
+                                "Видео не набрало просмотров!"
+                            ])
+                        elif activity_name == "NFT":
+                            print_message("Неудача", [
+                                "Коллекция NFT не вызвала интереса!"
                             ])
                     
                     # Проверяем достижения
-                    achievement_reward = check_achievements({
-                        "turn_count": self.turn_count,
-                        "dog_health": self.dog_health,
-                        "games_won": self.games_won,
-                        "money": self.money
-                    })
-                    
+                    achievement_reward = self.check_achievements()
                     if achievement_reward > 0:
                         self.money += achievement_reward
                         print_message("Достижение", [
@@ -348,7 +438,7 @@ class Game:
                             f"+{achievement_reward} JK"
                         ])
                 else:
-                    print_message("Ошибка", ["Неверный номер игры!"])
+                    print_message("Ошибка", ["Неверный номер активности!"])
             except ValueError:
                 print_message("Ошибка", ["Неверный формат команды!"])
 
@@ -379,16 +469,17 @@ class Game:
             "Доступные здания:",
             "1. Магазин",
             "2. Отдых",
-            "3. Мини-игры",
-            "4. Достижения"
+            "3. Блогерство",
+            "4. Достижения",
+            "5. Сохранить игру"
         ]
         
         # Добавляем ветеринарную станцию для Кузнецка и Рязани
         if current_city in ["Кузнецк", "Рязань"]:
-            content.append("5. Ветеринарная станция")
-            content.append("6. Выйти из города")
+            content.append("6. Ветеринарная станция")
+            content.append("7. Выйти из города")
         else:
-            content.append("5. Выйти из города")
+            content.append("6. Выйти из города")
         
         print_message("Город", content)
         
@@ -399,16 +490,33 @@ class Game:
             elif choice == "2":
                 self.rest()
             elif choice == "3":
-                self.show_mini_games_menu()
+                self.show_blogging_menu()
             elif choice == "4":
                 self.show_achievements_menu()
-            elif choice == "5" and current_city in ["Кузнецк", "Рязань"]:
+            elif choice == "5":
+                save_game(get_save_data(self), self.username)
+                print_message("Сохранение", ["Игра успешно сохранена!"])
+            elif choice == "6" and current_city in ["Кузнецк", "Рязань"]:
                 if self.dog_health < 100:
-                    self.dog_health = 100
-                    print_message("Ветеринарная станция", ["Ветеринарная служба вылечила собаку!"])
+                    cost = (100 - self.dog_health) * 5
+                    if self.money >= cost:
+                        self.money -= cost
+                        old_health = self.dog_health
+                        self.dog_health = 100
+                        print_message("Ветеринарная станция", [
+                            f"Ветеринарная служба вылечила собаку!",
+                            f"Стоимость лечения: {cost} JK",
+                            f"Здоровье собаки: {old_health} → 100 (+{100 - old_health})"
+                        ])
+                    else:
+                        print_message("Ветеринарная станция", [
+                            f"Недостаточно денег для лечения!",
+                            f"Необходимо: {cost} JK",
+                            f"У вас: {self.money} JK"
+                        ])
                 else:
                     print_message("Ветеринарная станция", ["Собака полностью здорова!"])
-            elif choice in ["5", "6"]:
+            elif choice in ["6", "7"]:
                 break
             else:
                 print_message("Ошибка", ["Неверный выбор!"])
@@ -437,7 +545,23 @@ class Game:
                 ])
 
         if skip_turn:
-            print_message("Пропуск хода", ["Вы должны пропустить этот ход из-за последствий Рывка Анаконды!"])
+            # Сохраняем старые значения параметров
+            old_energy = self.player_energy
+            old_health = self.player_health
+            old_dog_health = self.dog_health
+            
+            # Восстанавливаем параметры как при отдыхе
+            self.player_energy = min(100, self.player_energy + 20)
+            self.player_health = min(100, self.player_health + 10)
+            
+            content = [
+                "Вы должны пропустить этот ход из-за последствий Рывка Анаконды!",
+                "",
+                "Во время отдыха:",
+                f"Энергия: {old_energy} → {self.player_energy} (+{self.player_energy - old_energy})",
+                f"Здоровье: {old_health} → {self.player_health} (+{self.player_health - old_health})"
+            ]
+            print_message("Пропуск хода", content)
             return
 
         if self.injury_turns > 0:
@@ -450,84 +574,89 @@ class Game:
             return
 
         # Случайное событие при движении
-        event_chance = random.random()
         event_message = []
         
-        if event_chance < 0.6:  # 60% шанс события
-            # Получаем случайное событие из всех доступных событий
-            all_events = list(EVENTS.items())
-            random_event = random.choice(all_events)
-            event_id, event_data = random_event
-            
-            event_message.extend([
-                "СОБЫТИЕ",
-                "-------",
-                f"Название: {event_data['name']}",
-                f"Описание: {event_data['description']}",
-                ""
-            ])
-            
-            # Применяем эффекты события
-            if event_data['effect'] != 'none':
-                if event_data['effect'] == 'player_health':
-                    self.player_health = max(0, min(100, self.player_health + event_data['value']))
-                elif event_data['effect'] == 'energy':
-                    self.player_energy = max(0, min(100, self.player_energy + event_data['value']))
-                elif event_data['effect'] == 'dog_health':
-                    self.dog_health = max(0, min(100, self.dog_health + event_data['value']))
-                    # Показываем прогноз здоровья собаки на 5 ходов вперед
-                    if event_data['value'] < 0:  # Если это негативное событие
-                        event_message.extend([
-                            f"Текущее здоровье собаки: {self.dog_health}",
-                            f"Потеря здоровья: {abs(event_data['value'])}",
-                            f"Здоровье после события: {max(0, self.dog_health)}",
-                            ""
-                        ])
-                elif event_data['effect'] == 'money':
-                    if isinstance(event_data['value'], tuple):
-                        value = random.randint(event_data['value'][0], event_data['value'][1])
-                    else:
-                        value = event_data['value']
-                    self.money = max(0, self.money + value)
+        # Получаем случайное событие из всех доступных событий
+        all_events = list(EVENTS.items())
+        random_event = random.choice(all_events)
+        event_id, event_data = random_event
+        
+        event_message.extend([
+            "СОБЫТИЕ",
+            "-------",
+            f"Название: {event_data['name']}",
+            f"Описание: {event_data['description']}",
+            ""
+        ])
+        
+        # Применяем эффекты события
+        if event_data['effect'] != 'none':
+            if event_data['effect'] == 'player_health':
+                self.player_health = max(0, min(100, self.player_health + event_data['value']))
+            elif event_data['effect'] == 'energy':
+                self.player_energy = max(0, min(100, self.player_energy + event_data['value']))
+            elif event_data['effect'] == 'dog_health':
+                self.dog_health = max(0, min(100, self.dog_health + event_data['value']))
+                # Показываем прогноз здоровья собаки на 5 ходов вперед
+                if event_data['value'] < 0:  # Если это негативное событие
                     event_message.extend([
-                        f"Получено денег: {value} JK",
-                        f"Текущий баланс: {self.money} JK",
+                        f"Текущее здоровье собаки: {self.dog_health}",
+                        f"Потеря здоровья: {abs(event_data['value'])}",
+                        f"Здоровье после события: {max(0, self.dog_health)}",
                         ""
                     ])
-                elif event_data['effect'] == 'special_move':
-                    if self.player_energy >= event_data.get('energy_cost', 0):
-                        self.player_energy -= event_data['energy_cost']
-                        if event_data.get('health_cost'):
-                            self.player_health = max(0, self.player_health - event_data['health_cost'])
-                        if event_data.get('skip_turn'):
-                            self.skip_next_turn = True
-                elif event_data['effect'] == 'injury':
-                    self.injury_turns = event_data['value']
-                    if event_data.get('move_penalty'):
-                        self.active_effects['move_penalty'] = {
-                            'value': event_data['move_penalty'],
-                            'duration': event_data['value']
-                        }
-                elif event_data['effect'] == 'energy_cost':
-                    self.active_effects['energy_cost'] = {
-                        'value': event_data['value'],
-                        'duration': 1
+            elif event_data['effect'] == 'money':
+                if isinstance(event_data['value'], tuple):
+                    value = random.randint(event_data['value'][0], event_data['value'][1])
+                else:
+                    value = event_data['value']
+                self.money = max(0, self.money + value)
+                event_message.extend([
+                    f"Получено денег: {value} JK",
+                    f"Текущий баланс: {self.money} JK",
+                    ""
+                ])
+            elif event_data['effect'] == 'special_move':
+                if self.player_energy >= event_data.get('energy_cost', 0):
+                    self.player_energy -= event_data['energy_cost']
+                    if event_data.get('health_cost'):
+                        self.player_health = max(0, self.player_health - event_data['health_cost'])
+                    if event_data.get('skip_turn'):
+                        self.skip_next_turn = True
+            elif event_data['effect'] == 'injury':
+                self.injury_turns = event_data['value']
+                if event_data.get('move_penalty'):
+                    self.active_effects['move_penalty'] = {
+                        'value': event_data['move_penalty'],
+                        'duration': event_data['value']
                     }
-                elif event_data['effect'] == 'bonus_move':
-                    self.active_effects['move_bonus'] = {
-                        'value': event_data['value'],
-                        'duration': 1
-                    }
-                
-                event_message.append("Событие повлияло на ваши параметры!")
+            elif event_data['effect'] == 'energy_cost':
+                self.active_effects['energy_cost'] = {
+                    'value': event_data['value'],
+                    'duration': 1
+                }
+            elif event_data['effect'] == 'bonus_move':
+                self.active_effects['move_bonus'] = {
+                    'value': event_data['value'],
+                    'duration': 1
+                }
+            
+            event_message.append("Событие повлияло на ваши параметры!")
+            
+            # Добавляем информацию об изменениях инвентаря
+            if event_data['name'] == "Добрые жители":
+                if self.get_inventory_size() < self.get_inventory_slots():
+                    self.inventory["Еда"] = self.inventory.get("Еда", 0) + 1
+                    event_message.append(f"Что произошло: +1 еда в инвентаре ({self.get_inventory_slots() - self.get_inventory_size()}/{self.get_inventory_slots()} свободно)")
+                else:
+                    event_message.append("Что произошло: инвентарь полон, еда потеряна")
 
         # Добавляем разделитель между событием и движением
-        if event_chance < 0.6:
-            event_message.extend([
-                "",
-                "ДВИЖЕНИЕ",
-                "--------"
-            ])
+        event_message.extend([
+            "",
+            "ДВИЖЕНИЕ",
+            "--------"
+        ])
 
         move_distance = 4
 
@@ -636,6 +765,17 @@ class Game:
             # Показываем все сообщения одним блоком
             print_message("Ход", event_message)
 
+        # Проверяем здоровье собаки и обновляем инвентарь если нужно
+        if self.dog_health <= 50 and self.get_inventory_size() > 10:
+            # Оставляем только первые 10 предметов
+            items_to_keep = list(self.inventory.items())[:10]
+            self.inventory = dict(items_to_keep)
+            print_message("Инвентарь", [
+                "Здоровье собаки упало ниже 50%!",
+                "Из-за этого вы потеряли часть предметов из инвентаря.",
+                f"Осталось слотов: {self.get_inventory_slots()}"
+            ])
+
     def show_special_abilities_menu(self):
         content = [
             "1. Бросок Кобры (8 кл., 35 энергии)",
@@ -684,10 +824,16 @@ class Game:
         if self.inventory:
             content.extend([
                 "",
-                "Инвентарь:"
+                f"Инвентарь ({self.get_inventory_size()}/{self.get_inventory_slots()}):"
             ])
             for item, count in dict(self.inventory).items():
-                content.append(f"- {item}: {count}")
+                effect_text = ""
+                if item in SHOP_ITEMS:
+                    if SHOP_ITEMS[item]["effect"] == "health":
+                        effect_text = f" (+{SHOP_ITEMS[item]['value']} здоровья)"
+                    elif SHOP_ITEMS[item]["effect"] == "energy":
+                        effect_text = f" (+{SHOP_ITEMS[item]['value']} энергии)"
+                content.append(f"- {item}: {count}{effect_text}")
 
         if self.injury_turns > 0:
             content.extend([
@@ -752,18 +898,46 @@ class Game:
             old_energy = self.player_energy
             old_health = self.player_health
             
+            # Сначала увеличиваем энергию и здоровье
+            self.player_energy = min(100, self.player_energy + 20)
+            self.player_health = min(100, self.player_health + 10)
+            self.rested_in_city = False
+            
             content = [
                 "Вы отдыхаете на природе",
                 "",
                 f"Энергия: {old_energy} → {self.player_energy} (+{self.player_energy - old_energy})",
                 f"Здоровье: {old_health} → {self.player_health} (+{self.player_health - old_health})"
             ]
-            self.player_energy = min(100, self.player_energy + 20)
-            self.rested_in_city = False
             print_message("Отдых", content)
 
+    def check_achievements(self):
+        total_reward = 0
+        stats = {
+            "player_position": self.player_position,
+            "money": self.money,
+            "games_won": self.games_won,
+            "turn_count": self.turn_count,
+            "dog_health": self.dog_health,
+            "monetization_earnings": self.monetization_earnings,
+            "donations_received": self.donations_received,
+            "sponsor_deals": self.sponsor_deals
+        }
+        
+        for achievement_name, achievement_data in self.achievements.items():
+            if not achievement_data["completed"]:
+                if achievement_data["check"](stats):
+                    achievement_data["completed"] = True
+                    total_reward += achievement_data["reward"]
+                    print_message("Новое достижение!", [
+                        f"Достижение разблокировано: {achievement_name}",
+                        f"Описание: {achievement_data['description']}",
+                        f"Награда: {achievement_data['reward']} JK"
+                    ])
+        
+        return total_reward
+
 def main():
-    game = Game()
     print_message("Добро пожаловать", [
         "Добро пожаловать в игру 'Путь к Москве'!",
         "Ваша цель - добраться из Самары до Москвы (220-я клетка)",
@@ -775,22 +949,64 @@ def main():
     for city, pos in CITIES.items():
         print(f"- {city} ({pos}-я клетка)")
 
+    # Проверяем существующие сохранения
+    if os.path.exists('saves'):
+        saves = [f[:-5] for f in os.listdir('saves') if f.endswith('.json')]
+        if saves:
+            print("\nНайдены сохранения:")
+            for i, save in enumerate(saves, 1):
+                print(f"{i}. {save}")
+            print(f"{len(saves) + 1}. Новая игра")
+            
+            choice = input("\nВыберите сохранение или новую игру: ")
+            try:
+                choice = int(choice)
+                if 1 <= choice <= len(saves):
+                    username = saves[choice - 1]
+                    password = input("Введите пароль: ")
+                    # TODO: Добавить проверку пароля
+                    game = Game(username)
+                    save_data = load_game(username)
+                    if save_data:
+                        load_save_data(game, save_data)
+                else:
+                    username = input("Придумайте имя героя: ")
+                    password = input("Придумайте пароль: ")
+                    # TODO: Сохранить пароль
+                    game = Game(username)
+            except ValueError:
+                print_message("Ошибка", ["Неверный выбор!"])
+                return
+        else:
+            username = input("Придумайте имя героя: ")
+            password = input("Придумайте пароль: ")
+            # TODO: Сохранить пароль
+            game = Game(username)
+    else:
+        username = input("Придумайте имя героя: ")
+        password = input("Придумайте пароль: ")
+        # TODO: Сохранить пароль
+        game = Game(username)
+
     while True:
         game.display_status()
         choice = input("\nВыберите действие: ")
 
         if choice == "1":
-            game.turn_count += 1
             game.move_player()
+            game.turn_count += 1
         elif choice == "2":
-            game.turn_count += 1
             game.show_special_abilities_menu()
-        elif choice == "3":
             game.turn_count += 1
+        elif choice == "3":
             game.rest()
+            game.turn_count += 1
         elif choice == "4":
             game.show_inventory_menu()
         elif choice == "5":
+            save_game(get_save_data(game), game.username)
+            print_message("Сохранение", ["Игра успешно сохранена!"])
+        elif choice == "6":
             print_message("Прощание", ["Спасибо за игру!"])
             break
         else:
